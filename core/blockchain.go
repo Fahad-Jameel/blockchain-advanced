@@ -2,6 +2,7 @@ package core
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -73,6 +74,12 @@ func (bc *Blockchain) AddBlock(block *Block) error {
 	// Validate block
 	if err := bc.validateBlock(block); err != nil {
 		return err
+	}
+
+	// Fix: Add proper height validation
+	expectedHeight := bc.currentHeight + 1
+	if block.Header.Height != expectedHeight {
+		return fmt.Errorf("invalid block height: expected %d, got %d", expectedHeight, block.Header.Height)
 	}
 
 	// Add block

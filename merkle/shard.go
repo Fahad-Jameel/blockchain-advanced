@@ -302,13 +302,25 @@ func (mt *MerkleTree) buildTree() {
 }
 
 // GenerateProof generates a Merkle proof for a key
+// Add to MerkleTree struct methods:
+
+// GenerateProof generates a Merkle proof for a key
 func (mt *MerkleTree) GenerateProof(key []byte) *MerkleProof {
 	mt.mu.RLock()
 	defer mt.mu.RUnlock()
 
-	// Find leaf node
+	// Hash the key to find the leaf
 	leafHash := core.ComputeHash(key)
-	leafNode := mt.Nodes[leafHash]
+
+	// Check if leaf exists in tree
+	var leafNode *MerkleNode
+	for _, leaf := range mt.Leaves {
+		if leaf == leafHash {
+			leafNode = mt.Nodes[leaf]
+			break
+		}
+	}
+
 	if leafNode == nil {
 		return nil
 	}

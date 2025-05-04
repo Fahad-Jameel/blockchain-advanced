@@ -1,3 +1,4 @@
+// consensus/hybrid_consensus.go - Fixed with proper block processing
 package consensus
 
 import (
@@ -274,7 +275,6 @@ func (hc *HybridConsensus) ProcessVote(vote *Vote) error {
 }
 
 // ProcessProposal processes a block proposal
-// ProcessProposal processes a block proposal
 func (hc *HybridConsensus) ProcessProposal(proposal *BlockProposal) error {
 	// Validate proposal
 	if err := hc.ValidateBlock(proposal.Block); err != nil {
@@ -291,7 +291,7 @@ func (hc *HybridConsensus) ProcessProposal(proposal *BlockProposal) error {
 
 	// Vote on the proposal
 	vote := &Vote{
-		BlockHash:     blockHash, // Now using the blockHash variable
+		BlockHash:     blockHash,
 		ValidatorAddr: hc.getSelfAddress(),
 		IsValid:       true,
 		Timestamp:     time.Now(),
@@ -313,7 +313,6 @@ func (hc *HybridConsensus) ProcessProposal(proposal *BlockProposal) error {
 // ProcessCommit processes a commit message
 func (hc *HybridConsensus) ProcessCommit(commit *CommitMessage) error {
 	block := commit.Block
-	// blockHash is now used in the FinalizeBlock call
 
 	// Verify we have enough signatures
 	if !hc.hasQuorum(block) {

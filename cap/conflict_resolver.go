@@ -80,14 +80,37 @@ func NewConflictResolver() *ConflictResolver {
 
 // DetectConflictType analyzes a conflict to determine its type
 func (cr *ConflictResolver) DetectConflictType(conflict *StateConflict) ConflictType {
-	// Use entropy analysis
-	entropy := cr.calculateEntropy(conflict)
+	// Fix: Properly detect concurrent writes
+	if conflict == nil || len(conflict.States) == 0 {
+		return UnknownConflict
+	}
 
+	// Check for concurrent writes (multiple states from different nodes)
+	if len(conflict.States) > 1 {
+		nodeMap := make(map[string]bool)
+		for _, state := range conflict.States {
+			nodeMap[state.NodeID] = true
+		}
+
+		// If we have multiple different nodes, it's a concurrent write
+		if len(nodeMap) > 1 {
+			return ConcurrentWrite
+		}
+	}
+
+	// Use entropy analysis for partition divergence
+	entropy := cr.calculateEntropy(conflict)
 	if entropy > 0.8 {
 		return PartitionDivergence
-	} else if cr.hasCausalViolation(conflict) {
+	}
+
+	// Check for causal violations
+	if cr.hasCausalViolation(conflict) {
 		return CausalViolation
-	} else if len(conflict.States) > 1 {
+	}
+
+	// Default case: concurrent write if multiple states
+	if len(conflict.States) > 1 {
 		return ConcurrentWrite
 	}
 

@@ -1,6 +1,8 @@
 package state
 
 import (
+	"blockchain-advanced/core"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"sync"
@@ -23,8 +25,33 @@ func (sa *StateArchive) Archive(state *WorldState) error {
 	sa.mu.Lock()
 	defer sa.mu.Unlock()
 
+	// Fix: Create a serializable version of the state
+	serializableState := struct {
+		StateRoot       string                        `json:"stateRoot"`
+		Accounts        map[string]*core.AccountState `json:"accounts"`
+		Contracts       map[string]*ContractState     `json:"contracts"`
+		Shards          map[uint32]*core.ShardState   `json:"shards"`
+		AccumulatorRoot string                        `json:"accumulatorRoot"`
+		Timestamp       time.Time                     `json:"timestamp"`
+	}{
+		StateRoot:       state.StateRoot.String(),
+		Accounts:        make(map[string]*core.AccountState),
+		Contracts:       make(map[string]*ContractState),
+		Shards:          state.Shards,
+		AccumulatorRoot: state.AccumulatorRoot.String(),
+		Timestamp:       state.Timestamp,
+	}
+
+	// Convert Address keys to string for JSON serialization
+	for addr, account := range state.Accounts {
+		serializableState.Accounts[addr.String()] = account
+	}
+	for addr, contract := range state.Contracts {
+		serializableState.Contracts[addr.String()] = contract
+	}
+
 	// Serialize the state
-	data, err := json.Marshal(state)
+	data, err := json.Marshal(serializableState)
 	if err != nil {
 		return err
 	}
@@ -43,12 +70,76 @@ func (sa *StateArchive) Retrieve(height uint64) (*WorldState, error) {
 		return nil, errors.New("archived state not found")
 	}
 
-	var state WorldState
-	if err := json.Unmarshal(data, &state); err != nil {
+	var serializableState struct {
+		StateRoot       string                        `json:"stateRoot"`
+		Accounts        map[string]*core.AccountState `json:"accounts"`
+		Contracts       map[string]*ContractState     `json:"contracts"`
+		Shards          map[uint32]*core.ShardState   `json:"shards"`
+		AccumulatorRoot string                        `json:"accumulatorRoot"`
+		Timestamp       time.Time                     `json:"timestamp"`
+	}
+
+	if err := json.Unmarshal(data, &serializableState); err != nil {
 		return nil, err
 	}
 
-	return &state, nil
+	// Convert back to proper WorldState
+	state := &WorldState{
+		Accounts:  make(map[core.Address]*core.AccountState),
+		Contracts: make(map[core.Address]*ContractState),
+		Shards:    serializableState.Shards,
+		Timestamp: serializableState.Timestamp,
+	}
+
+	// Parse state root from hex string
+	stateRootBytes, err := hex.DecodeString(serializableState.StateRoot)
+	if err == nil && len(stateRootBytes) == 32 {
+		copy(state.StateRoot[:], stateRootBytes)
+	}
+
+	// Parse accumulator root from hex string
+	accumulatorRootBytes, err := hex.DecodeString(serializableState.AccumulatorRoot)
+	if err == nil && len(accumulatorRootBytes) == 32 {
+		copy(state.AccumulatorRoot[:], accumulatorRootBytes)
+	}
+
+	// Convert string keys back to Address
+	for addrStr, account := range serializableState.Accounts {
+		// Parse address from string (remove the 0x prefix if present)
+		if len(addrStr) >= 2 && addrStr[:2] == "0x" {
+			addrStr = addrStr[2:]
+		}
+
+		// Decode hex string to bytes
+		addrBytes, err := hex.DecodeString(addrStr)
+		if err != nil || len(addrBytes) != 20 {
+			continue // Skip invalid addresses
+		}
+
+		var addr core.Address
+		copy(addr[:], addrBytes)
+		state.Accounts[addr] = account
+	}
+
+	// Convert string keys back to Address for contracts
+	for addrStr, contract := range serializableState.Contracts {
+		// Parse address from string (remove the 0x prefix if present)
+		if len(addrStr) >= 2 && addrStr[:2] == "0x" {
+			addrStr = addrStr[2:]
+		}
+
+		// Decode hex string to bytes
+		addrBytes, err := hex.DecodeString(addrStr)
+		if err != nil || len(addrBytes) != 20 {
+			continue // Skip invalid addresses
+		}
+
+		var addr core.Address
+		copy(addr[:], addrBytes)
+		state.Contracts[addr] = contract
+	}
+
+	return state, nil
 }
 
 // StatePruner handles state pruning

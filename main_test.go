@@ -119,9 +119,11 @@ func TestStateVerification(t *testing.T) {
 	// Get current state
 	currentState, _ := sm.GetCurrentState()
 
-	// Generate state proof
-	stateRoot := core.Hash{1, 2, 3} // Sample state root
+	// Generate state proof with known values for testing
+	stateRoot := core.Hash{1, 2, 3}
 	witness := []byte("test_witness")
+
+	// Create a state proof
 	stateProof, err := zkp.GenerateStateProof(stateRoot, witness)
 	if err != nil {
 		t.Errorf("Failed to generate state proof: %v", err)
@@ -320,8 +322,13 @@ func TestSecurity(t *testing.T) {
 	t.Run("ZeroKnowledgeProofs", func(t *testing.T) {
 		zkp := crypto.NewZKPSystem()
 
-		secret := big.NewInt(12345)
-		statement := big.NewInt(67890)
+		// Use values that work with our test system
+		secret := big.NewInt(2)
+		// Compute statement = g^secret mod p
+		// For our test system: g=5, p=23
+		generator := big.NewInt(5)
+		prime := big.NewInt(23)
+		statement := new(big.Int).Exp(generator, secret, prime)
 
 		// Generate proof
 		proof, err := zkp.GenerateProof(secret, statement)
@@ -336,7 +343,7 @@ func TestSecurity(t *testing.T) {
 		}
 
 		// Test with wrong statement
-		wrongStatement := big.NewInt(99999)
+		wrongStatement := big.NewInt(99)
 		valid = zkp.VerifyProof(proof, wrongStatement)
 		if valid {
 			t.Error("Invalid ZKP verified")
